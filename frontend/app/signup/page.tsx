@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import toast from 'react-hot-toast';
 
 export default function SignupPage() {
   const router = useRouter();
@@ -29,6 +30,7 @@ export default function SignupPage() {
     // Validate passwords match
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match');
+      toast.error('Passwords do not match');
       return;
     }
 
@@ -50,13 +52,15 @@ export default function SignupPage() {
       const data = await response.json();
 
       if (response.ok) {
-        alert('Signup successful! Please login.');
-        router.push('/login');
+        toast.success('Signup successful! Redirecting to login...');
+        setTimeout(() => router.push('/login'), 1000);
       } else {
         setError(data.error || 'Signup failed');
+        toast.error(data.error || 'Signup failed');
       }
     } catch (err) {
       setError('Failed to connect to server');
+      toast.error('Failed to connect to server');
     } finally {
       setLoading(false);
     }

@@ -2,6 +2,8 @@
 
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useState, useEffect, Suspense } from 'react';
+import { bookingsAPI } from '../lib/api';
+import toast from 'react-hot-toast';
 
 function BookingContent() {
   const searchParams = useSearchParams();
@@ -26,11 +28,12 @@ function BookingContent() {
     specialRequests: '',
   });
   const [nights, setNights] = useState(0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
     if (!storedUser) {
-      alert('Please login to book a hotel');
+      toast.error('Please login to book a hotel');
       router.push('/login');
       return;
     }
@@ -54,27 +57,51 @@ function BookingContent() {
     }
   }, [checkIn, checkOut, router]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
     
-    const booking = {
-      hotelId,
-      hotelName,
-      checkIn,
-      checkOut,
-      nights,
-      pricePerNight,
-      totalPrice: calculateTotal(),
-      ...formData,
-    };
+    try {
+      const bookingData = {
+        userId: user.id || '',
+        userEmail: user.email,
+        hotelId: hotelId || '',
+        hotelName,
+        checkIn,
+        checkOut,
+        nights,
+        pricePerNight,
+        totalPrice: calculateTotal(),
+        fullName: formData.fullName,
+        email: formData.email,
+        phone: formData.phone,
+        rooms: parseInt(formData.rooms),
+        adults: parseInt(formData.adults),
+        children: parseInt(formData.children),
+        mealPreference: formData.mealPreference,
+        specialRequests: formData.specialRequests,
+      };
 
-    // Save to localStorage for demo
-    const bookings = JSON.parse(localStorage.getItem('bookings') || '[]');
-    bookings.push(booking);
-    localStorage.setItem('bookings', JSON.stringify(bookings));
+      toast.loading('Creating booking...', { id: 'booking-submit' });
+      const response = await bookingsAPI.create(bookingData);
+      
+      if (response.success) {
+        // Also save to localStorage for backward compatibility
+        const bookings = JSON.parse(localStorage.getItem('bookings') || '[]');
+        bookings.push(response.booking);
+        localStorage.setItem('bookings', JSON.stringify(bookings));
 
-    alert('Booking confirmed! Redirecting to your bookings...');
-    router.push('/bookings');
+        toast.success('Booking confirmed! Redirecting...', { id: 'booking-submit' });
+        setTimeout(() => router.push('/bookings'), 1000);
+      } else {
+        toast.error('Failed to create booking: ' + response.message, { id: 'booking-submit' });
+      }
+    } catch (error) {
+      console.error('Booking error:', error);
+      toast.error('Failed to create booking. Please try again.', { id: 'booking-submit' });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const calculateTotal = () => {
@@ -273,9 +300,10 @@ function BookingContent() {
 
                 <button
                   type="submit"
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 px-6 rounded-lg transition-colors text-lg"
+                  disabled={isSubmitting}
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold py-4 px-6 rounded-lg transition-colors text-lg"
                 >
-                  Confirm Booking
+                  {isSubmitting ? 'Processing...' : 'Confirm Booking'}
                 </button>
               </form>
             </div>

@@ -45,34 +45,36 @@ export const hotelsAPI = {
   },
 };
 
-// Bookings API (for future backend integration)
+// Bookings API
 export const bookingsAPI = {
-  create: async (data: {
-    hotelId: string;
-    checkIn: string;
-    checkOut: string;
-    guests: string;
-    fullName: string;
-    email: string;
-    phone: string;
-    specialRequests?: string;
-  }) => {
+  create: async (data: any) => {
     const response = await fetch(`${API_BASE_URL}/api/bookings`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('token')}`,
       },
       body: JSON.stringify(data),
     });
     return response.json();
   },
 
-  getUserBookings: async () => {
-    const response = await fetch(`${API_BASE_URL}/api/bookings/my-bookings`, {
+  getUserBookings: async (email: string) => {
+    const response = await fetch(`${API_BASE_URL}/api/bookings/user/${encodeURIComponent(email)}`);
+    return response.json();
+  },
+
+  getBookingById: async (id: string) => {
+    const response = await fetch(`${API_BASE_URL}/api/bookings/${id}`);
+    return response.json();
+  },
+
+  cancelBooking: async (id: string, reason?: string) => {
+    const response = await fetch(`${API_BASE_URL}/api/bookings/${id}/cancel`, {
+      method: 'PUT',
       headers: {
-        Authorization: `Bearer ${localStorage.getItem('token')}`,
+        'Content-Type': 'application/json',
       },
+      body: JSON.stringify({ reason: reason || 'No reason provided' }),
     });
     return response.json();
   },

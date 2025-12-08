@@ -1,10 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { bookingsAPI } from '../lib/api';
+import toast from 'react-hot-toast';
 
 export default function BookingsPage() {
   const [bookings, setBookings] = useState<any[]>([]);
   const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
@@ -12,15 +16,110 @@ export default function BookingsPage() {
       window.location.href = '/login';
       return;
     }
-    setUser(JSON.parse(storedUser));
-
-    // Load bookings from localStorage (in real app, fetch from backend)
-    const storedBookings = JSON.parse(localStorage.getItem('bookings') || '[]');
-    setBookings(storedBookings);
+    const userData = JSON.parse(storedUser);
+    setUser(userData);
+    
+    loadBookings(userData.email);
   }, []);
 
-  if (!user) {
-    return null;
+  const loadBookings = async (email: string) => {
+    try {
+      setLoading(true);
+      const response = await bookingsAPI.getUserBookings(email);
+      setBookings(response);
+      
+      // Also save to localStorage for backward compatibility
+      localStorage.setItem('bookings', JSON.stringify(response));
+    } catch (error) {
+      console.error('Failed to load bookings:', error);
+      toast.error('Failed to load bookings from server. Showing cached data.');
+      // Fallback to localStorage if backend fails
+      const storedBookings = JSON.parse(localStorage.getItem('bookings') || '[]');
+      setBookings(storedBookings);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCancelBooking = async (bookingId: string, hotelName: string) => {
+    // Create a custom toast for confirmation
+    const confirmToast = toast.custom((t) => (
+      <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-md w-full bg-white shadow-lg rounded-lg pointer-events-auto flex ring-1 ring-black ring-opacity-5`}>
+        <div className="flex-1 w-0 p-4">
+          <div className="flex items-start">
+            <div className="ml-3 flex-1">
+              <p className="text-sm font-medium text-gray-900">
+                Cancel Booking?
+              </p>
+              <p className="mt-1 text-sm text-gray-500">
+                {hotelName}
+              </p>
+              <div className="mt-3">
+                <input
+                  id="cancel-reason"
+                  type="text"
+                  placeholder="Reason (optional)"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="flex border-l border-gray-200">
+          <button
+            onClick={() => {
+              toast.dismiss(t.id);
+              const reasonInput = document.getElementById('cancel-reason') as HTMLInputElement;
+              const reason = reasonInput?.value || 'No reason provided';
+              processCancellation(bookingId, reason);
+            }}
+            className="w-full border border-transparent rounded-none rounded-r-lg p-4 flex items-center justify-center text-sm font-medium text-red-600 hover:text-red-500 focus:outline-none"
+          >
+            Confirm
+          </button>
+        </div>
+        <div className="flex border-l border-gray-200">
+          <button
+            onClick={() => toast.dismiss(t.id)}
+            className="w-full border border-transparent rounded-none rounded-r-lg p-4 flex items-center justify-center text-sm font-medium text-gray-700 hover:text-gray-500 focus:outline-none"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    ), { duration: Infinity });
+  };
+
+  const processCancellation = async (bookingId: string, reason: string) => {
+    try {
+      setCancellingId(bookingId);
+      toast.loading('Cancelling booking...', { id: 'cancel-booking' });
+      
+      const response = await bookingsAPI.cancelBooking(bookingId, reason);
+      
+      if (response.success) {
+        toast.success('Booking cancelled successfully!', { id: 'cancel-booking' });
+        // Reload bookings
+        if (user) {
+          loadBookings(user.email);
+        }
+      } else {
+        toast.error('Failed to cancel: ' + response.message, { id: 'cancel-booking' });
+      }
+    } catch (error) {
+      console.error('Cancellation error:', error);
+      toast.error('Failed to cancel booking. Please try again.', { id: 'cancel-booking' });
+    } finally {
+      setCancellingId(null);
+    }
+  };
+
+  if (!user || loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-xl text-gray-600">Loading bookings...</div>
+      </div>
+    );
   }
 
   return (
@@ -78,9 +177,32 @@ export default function BookingsPage() {
                       ₹{booking.totalPrice.toLocaleString('en-IN')}
                     </p>
                     <p className="text-sm text-gray-600">Total Price</p>
-                    <span className="inline-block mt-2 bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-semibold">
-                      Confirmed
-                    </span>
+                    
+                    {booking.status === 'CANCELLED' ? (
+                      <div className="mt-2">
+                        <span className="inline-block bg-red-100 text-red-800 px-3 py-1 rounded-full text-sm font-semibold">
+                          Cancelled
+                        </span>
+                        {booking.cancellationReason && (
+                          <p className="text-xs text-gray-500 mt-1">
+                            Reason: {booking.cancellationReason}
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="mt-2 space-y-2">
+                        <span className="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-semibold">
+                          Confirmed
+                        </span>
+                        <button
+                          onClick={() => handleCancelBooking(booking.id, booking.hotelName)}
+                          disabled={cancellingId === booking.id}
+                          className="block w-full mt-2 bg-red-500 hover:bg-red-600 disabled:bg-red-300 text-white px-4 py-2 rounded-lg transition-colors text-sm font-semibold"
+                        >
+                          {cancellingId === booking.id ? 'Cancelling...' : 'Cancel Booking'}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

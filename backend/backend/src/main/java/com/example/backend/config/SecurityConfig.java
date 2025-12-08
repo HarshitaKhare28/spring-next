@@ -22,6 +22,8 @@ public class SecurityConfig {
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/**").permitAll()
+                .requestMatchers("/api/bookings/**").permitAll()
+                .requestMatchers("/api/hotels/**").permitAll()
                 .anyRequest().authenticated()
             );
         

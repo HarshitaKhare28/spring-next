@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import toast from 'react-hot-toast';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -39,13 +40,15 @@ export default function LoginPage() {
       if (response.ok) {
         // Store user data in localStorage
         localStorage.setItem('user', JSON.stringify(data));
-        alert('Login successful!');
-        router.push('/');
+        toast.success('Login successful! Redirecting...');
+        setTimeout(() => router.push('/'), 1000);
       } else {
         setError(data.error || 'Login failed');
+        toast.error(data.error || 'Login failed');
       }
     } catch (err) {
       setError('Failed to connect to server');
+      toast.error('Failed to connect to server');
     } finally {
       setLoading(false);
     }
