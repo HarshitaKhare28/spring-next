@@ -8,18 +8,46 @@ export default function Navbar() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
 
-  useEffect(() => {
+  // Helper function to update user state from localStorage
+  const updateUser = () => {
     const storedUser = localStorage.getItem('user');
     if (storedUser) {
       setUser(JSON.parse(storedUser));
+    } else {
+      setUser(null);
     }
+  };
+
+  useEffect(() => {
+    // 1. Check user on initial load
+    updateUser();
+
+    // 2. Listen for the custom 'auth-change' event (triggered by Login/Signup)
+    const handleAuthChange = () => {
+      updateUser();
+    };
+
+    window.addEventListener('auth-change', handleAuthChange);
+    // Also listen for storage changes (e.g. if logged out in another tab)
+    window.addEventListener('storage', handleAuthChange);
+
+    // Cleanup listeners
+    return () => {
+      window.removeEventListener('auth-change', handleAuthChange);
+      window.removeEventListener('storage', handleAuthChange);
+    };
   }, []);
 
   const handleLogout = () => {
     localStorage.removeItem('user');
     setUser(null);
+    // Notify other components that auth has changed
+    window.dispatchEvent(new Event('auth-change'));
     router.push('/');
   };
+
+  // Shared class: White text by default, White BG on hover
+  const authButtonClass = "text-white px-5 py-2.5 rounded-lg transition-all font-semibold hover:bg-white hover:text-blue-600 hover:shadow-lg border border-transparent";
 
   return (
     <nav className="bg-gradient-to-r from-blue-600 to-indigo-700 shadow-lg sticky top-0 z-50 backdrop-blur-sm">
@@ -59,8 +87,8 @@ export default function Navbar() {
           <div className="flex items-center space-x-3">
             {user ? (
               <>
-                <div className="hidden md:flex items-center space-x-3 bg-white/10 px-4 py-2 rounded-lg backdrop-blur-sm">
-                  <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center">
+                <div className="hidden md:flex items-center space-x-3 bg-white/10 px-4 py-2 rounded-lg backdrop-blur-sm border border-white/20">
+                  <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-sm">
                     <span className="text-blue-600 font-bold text-sm">
                       {user.name?.charAt(0).toUpperCase()}
                     </span>
@@ -78,13 +106,13 @@ export default function Navbar() {
               <>
                 <Link
                   href="/login"
-                  className="text-white hover:bg-white/20 px-5 py-2.5 rounded-lg transition-all font-semibold"
+                  className={authButtonClass}
                 >
                   Login
                 </Link>
                 <Link
                   href="/signup"
-                  className="bg-white text-blue-600 hover:bg-blue-50 px-5 py-2.5 rounded-lg transition-all font-semibold shadow-md hover:shadow-lg"
+                  className={authButtonClass}
                 >
                   Sign Up
                 </Link>

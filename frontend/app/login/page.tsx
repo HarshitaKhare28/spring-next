@@ -27,20 +27,23 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
+      // Replace with your actual API endpoint
       const response = await fetch('http://localhost:8080/api/auth/login', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        // Store user data in localStorage
+        // 1. Store user data
         localStorage.setItem('user', JSON.stringify(data));
-        toast.success('Login successful! Redirecting...');
+        
+        // 2. IMPORTANT: Notify Navbar that auth has changed
+        window.dispatchEvent(new Event('auth-change'));
+
+        toast.success('Welcome back!');
         setTimeout(() => router.push('/'), 1000);
       } else {
         setError(data.error || 'Login failed');
@@ -55,67 +58,121 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-700 py-12 px-4">
-      <div className="bg-white p-8 md:p-10 rounded-2xl shadow-2xl w-full max-w-md">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-blue-600 mb-2">StayHub</h1>
-          <p className="text-gray-600">Welcome back! Login to continue</p>
+    // Main Container: Full viewport, background image covers everything
+    <div 
+      className="min-h-screen w-full flex relative overflow-hidden bg-cover bg-center"
+      // Image: Cozy/Warm vibe for login
+      style={{ backgroundImage: "url('https://images.unsplash.com/photo-1566073771259-6a8506099945?q=80&w=2070&auto=format&fit=crop')" }}
+    >
+      {/* Dark overlay for text contrast */}
+      <div className="absolute inset-0 bg-black/40 pointer-events-none" />
+
+      {/* LEFT SIDE - Hero Text with Blurry Transparent BG */}
+      <div className="hidden lg:flex w-1/2 relative items-center justify-center p-12">
+        <div className="relative z-10 w-full max-w-lg">
+          {/* Glassmorphism Container for Text */}
+          <div className="bg-black/20 backdrop-blur-md rounded-3xl p-10 border border-white/10 shadow-2xl">
+            <h1 className="text-5xl font-bold mb-6 text-white drop-shadow-lg leading-tight">
+              Welcome back!
+            </h1>
+            <p className="text-xl text-blue-50 drop-shadow-md leading-relaxed">
+              Sign in to manage your bookings, check your rewards, and plan your next getaway.
+            </p>
+          </div>
         </div>
+      </div>
+
+      {/* RIGHT SIDE - Login Form */}
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-4 md:p-8 relative z-20">
         
-        {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mb-4">
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div>
-            <label htmlFor="email" className="block text-sm font-semibold text-gray-700 mb-2">
-              Email Address
-            </label>
-            <input
-              type="email"
-              id="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              required
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
-              placeholder="you@example.com"
-            />
+        {/* Form Card: Solid clean look with slight transparency */}
+        <div className="w-full max-w-md bg-white/95 backdrop-blur-sm p-8 md:p-10 shadow-2xl rounded-3xl border border-white/50">
+          <div className="text-left mb-8">
+            <div className="flex items-center gap-2 mb-2">
+               <span className="text-2xl font-bold text-blue-600">StayHub</span>
+            </div>
+            <h2 className="text-3xl font-bold text-gray-900">Sign in</h2>
+            <p className="mt-2 text-sm text-gray-600">Please enter your details.</p>
           </div>
 
-          <div>
-            <label htmlFor="password" className="block text-sm font-semibold text-gray-700 mb-2">
-              Password
-            </label>
-            <input
-              type="password"
-              id="password"
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              required
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900"
-              placeholder="Enter your password"
-            />
-          </div>
+          {error && (
+            <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg mb-6">
+              <p className="text-sm text-red-700 font-medium">{error}</p>
+            </div>
+          )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-300 font-semibold text-lg shadow-lg"
-          >
-            {loading ? 'Logging in...' : 'Login'}
-          </button>
-        </form>
+          <form className="space-y-6" onSubmit={handleSubmit}>
+            <div className="space-y-5">
+              <div>
+                <label htmlFor="email" className="block text-sm font-semibold text-gray-700 mb-1">Email address</label>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  required
+                  value={formData.email}
+                  onChange={handleChange}
+                  className="block w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition duration-200"
+                  placeholder="you@example.com"
+                />
+              </div>
 
-        <p className="mt-6 text-center text-gray-600">
-          Don't have an account?{' '}
-          <Link href="/signup" className="text-blue-600 hover:text-blue-700 font-semibold">
-            Sign up
-          </Link>
-        </p>
+              <div>
+                <label htmlFor="password" className="block text-sm font-semibold text-gray-700 mb-1">Password</label>
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  required
+                  value={formData.password}
+                  onChange={handleChange}
+                  className="block w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition duration-200"
+                  placeholder="••••••••"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between mt-4">
+              <div className="flex items-center">
+                <input
+                  id="remember-me"
+                  name="remember-me"
+                  type="checkbox"
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+                />
+                <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-600 cursor-pointer font-medium">
+                  Remember me
+                </label>
+              </div>
+
+              <div className="text-sm">
+                <a href="#" className="font-semibold text-blue-600 hover:text-blue-700 transition-colors">
+                  Forgot password?
+                </a>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full flex justify-center py-3.5 px-4 border border-transparent rounded-xl shadow-lg text-base font-bold text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-300 disabled:cursor-not-allowed transition-all duration-200"
+            >
+              {loading ? (
+                 <span className="flex items-center gap-2">
+                   <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path></svg>
+                   Logging in...
+                 </span>
+              ) : 'Sign In'}
+            </button>
+          </form>
+
+          <p className="mt-8 text-center text-sm text-gray-600">
+            Don't have an account?{' '}
+            <Link href="/signup" className="font-bold text-blue-600 hover:text-blue-700 transition-colors">
+              Sign up for free
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   );
