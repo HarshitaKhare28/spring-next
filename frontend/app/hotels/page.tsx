@@ -14,6 +14,8 @@ interface Hotel {
   image: string;
   amenities: string[];
   description: string;
+  // optional detailed reviews list (frontend only)
+  reviewsList?: { user: string; rating: number; text: string; date?: string }[];
 }
 
 function HotelsContent() {
@@ -29,6 +31,9 @@ function HotelsContent() {
   const [filteredHotels, setFilteredHotels] = useState<Hotel[]>([]);
   const [priceRange, setPriceRange] = useState([0, 50000]);
   const [minRating, setMinRating] = useState(0);
+  const [reviewsMap, setReviewsMap] = useState<Record<number, { count: number; avg: number; list: { user: string; rating: number; text: string; date?: string }[] }>>({});
+  const [showReviewForm, setShowReviewForm] = useState<Record<number, boolean>>({});
+  const [reviewForm, setReviewForm] = useState<Record<number, { rating: number; text: string }>>({});
 
   useEffect(() => {
     // Mock hotel data filtered by location search
@@ -103,6 +108,26 @@ function HotelsContent() {
 
     setHotels(mockHotels);
     setFilteredHotels(mockHotels);
+    // fetch persisted reviews from backend for each mock hotel (if backend available)
+    (async () => {
+      const map: Record<number, any> = {};
+      for (const h of mockHotels) {
+        try {
+          const res = await fetch(`http://localhost:8080/api/hotels/${h.id}/reviews`);
+          if (res.ok) {
+            const list = await res.json();
+            const count = list.length;
+            const avg = count ? list.reduce((s: number, r: any) => s + r.rating, 0) / count : h.rating;
+            map[h.id] = { count, avg, list };
+          } else {
+            map[h.id] = { count: h.reviews || 0, avg: h.rating || 0, list: h.reviewsList || [] };
+          }
+        } catch (e) {
+          map[h.id] = { count: h.reviews || 0, avg: h.rating || 0, list: h.reviewsList || [] };
+        }
+      }
+      setReviewsMap(map);
+    })();
   }, [location]);
 
   useEffect(() => {
@@ -206,21 +231,11 @@ function HotelsContent() {
 
                     {/* Hotel Details */}
                     <div className="flex-1 p-6">
-                      <div className="flex justify-between items-start mb-2">
-                        <div>
-                          <h3 className="text-2xl font-bold text-gray-900">
-                            {hotel.name}
-                          </h3>
-                          <p className="text-gray-600">📍 {hotel.location}</p>
-                        </div>
-                        <div className="text-right">
-                          <div className="flex items-center gap-1 text-yellow-500 font-semibold">
-                            ⭐ {hotel.rating}
-                          </div>
-                          <p className="text-sm text-gray-600">
-                            ({hotel.reviews} reviews)
-                          </p>
-                        </div>
+                      <div className="mb-2">
+                        <h3 className="text-2xl font-bold text-gray-900">
+                          {hotel.name}
+                        </h3>
+                        <p className="text-gray-600">📍 {hotel.location}</p>
                       </div>
 
                       <p className="text-gray-700 mb-4">{hotel.description}</p>
@@ -236,6 +251,103 @@ function HotelsContent() {
                         ))}
                       </div>
 
+                      {/* Reviews summary and write review option */}
+                      <div className="mb-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="text-yellow-500 font-semibold">⭐ {reviewsMap[hotel.id]?.avg?.toFixed(1) || hotel.rating}</div>
+                            <Link href={`/hotels/${hotel.id}/reviews`} className="text-sm text-gray-600 underline">({reviewsMap[hotel.id]?.count ?? hotel.reviews} reviews)</Link>
+                          </div>
+                          {/* write review button moved next to Book Now for a cleaner layout */}
+                        </div>
+
+                        {showReviewForm[hotel.id] && (
+                          <div className="mt-3 bg-gray-50 p-4 rounded-lg">
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Your rating</label>
+                            <div className="flex items-center gap-1 mb-3">
+                              {[1, 2, 3, 4, 5].map((s) => (
+                                <button
+                                  key={s}
+                                  type="button"
+                                  onClick={() => setReviewForm((r) => ({ ...r, [hotel.id]: { ...(r[hotel.id] || { rating: 5, text: '' }), rating: s } }))}
+                                  className={`px-2 py-1 rounded ${((reviewForm[hotel.id]?.rating) ?? 0) >= s ? 'bg-yellow-400 text-white' : 'bg-white text-gray-500 border'}`}
+                                >
+                                  ⭐
+                                </button>
+                              ))}
+                            </div>
+
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Your review</label>
+                            <textarea
+                              value={reviewForm[hotel.id]?.text ?? ''}
+                              onChange={(e) => setReviewForm((r) => ({ ...r, [hotel.id]: { ...(r[hotel.id] || { rating: 5, text: '' }), text: e.target.value } }))}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg mb-3"
+                              rows={3}
+                              placeholder="Share your experience"
+                            />
+
+                            <div className="flex items-center gap-3">
+                              <button
+                                onClick={async () => {
+                                  const form = reviewForm[hotel.id] || { rating: 5, text: '' };
+                                  const userName = (localStorage.getItem('user') && JSON.parse(localStorage.getItem('user') || '{}')?.name) || 'Anonymous';
+                                  // POST to backend
+                                  try {
+                                    const res = await fetch(`http://localhost:8080/api/hotels/${hotel.id}/reviews`, {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ userName, rating: form.rating || 5, text: form.text || '' }),
+                                    });
+                                    if (res.ok) {
+                                      const saved = await res.json();
+                                      setReviewsMap((m) => {
+                                        const prev = m[hotel.id] || { count: hotel.reviews || 0, avg: hotel.rating || 0, list: [] };
+                                        const newCount = prev.count + 1;
+                                        const newAvg = ((prev.avg * prev.count) + saved.rating) / newCount;
+                                        return { ...m, [hotel.id]: { count: newCount, avg: newAvg, list: [saved, ...(prev.list || [])] } };
+                                      });
+                                    } else {
+                                      // fallback: update locally if backend unavailable
+                                      const newReview = { user: userName, rating: form.rating || 5, text: form.text || '', date: new Date().toISOString() };
+                                      setReviewsMap((m) => {
+                                        const prev = m[hotel.id] || { count: hotel.reviews || 0, avg: hotel.rating || 0, list: [] };
+                                        const newCount = prev.count + 1;
+                                        const newAvg = ((prev.avg * prev.count) + newReview.rating) / newCount;
+                                        return { ...m, [hotel.id]: { count: newCount, avg: newAvg, list: [newReview, ...(prev.list || [])] } };
+                                      });
+                                    }
+                                  } catch (err) {
+                                    const newReview = { user: userName, rating: form.rating || 5, text: form.text || '', date: new Date().toISOString() };
+                                    setReviewsMap((m) => {
+                                      const prev = m[hotel.id] || { count: hotel.reviews || 0, avg: hotel.rating || 0, list: [] };
+                                      const newCount = prev.count + 1;
+                                      const newAvg = ((prev.avg * prev.count) + newReview.rating) / newCount;
+                                      return { ...m, [hotel.id]: { count: newCount, avg: newAvg, list: [newReview, ...(prev.list || [])] } };
+                                    });
+                                  }
+
+                                  // clear form & hide
+                                  setReviewForm((r) => ({ ...r, [hotel.id]: { rating: 5, text: '' } }));
+                                  setShowReviewForm((s) => ({ ...s, [hotel.id]: false }));
+                                }}
+                                className="bg-blue-600 text-white px-4 py-2 rounded-lg"
+                              >
+                                Submit Review
+                              </button>
+                              <button
+                                onClick={() => setShowReviewForm((s) => ({ ...s, [hotel.id]: false }))}
+                                className="text-sm text-gray-600"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* show a couple of latest reviews */}
+                        {/* Reviews are summarized on the card; click the reviews count to see all reviews on a separate page. */}
+                      </div>
+
                       <div className="flex justify-between items-center">
                         <div>
                           <p className="text-3xl font-bold text-blue-600">
@@ -243,12 +355,22 @@ function HotelsContent() {
                           </p>
                           <p className="text-sm text-gray-600">per night</p>
                         </div>
-                        <Link
-                          href={`/booking?hotelId=${hotel.id}&hotelName=${encodeURIComponent(hotel.name)}&price=${hotel.price}&checkIn=${checkIn}&checkOut=${checkOut}&guests=${guests}`}
-                          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors font-semibold"
-                        >
-                          Book Now
-                        </Link>
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => setShowReviewForm((s) => ({ ...s, [hotel.id]: !s[hotel.id] }))}
+                            className="px-4 py-2 rounded-md border border-gray-300 bg-white text-gray-800 hover:bg-gray-50 transition-colors"
+                            aria-label={`Write a review for ${hotel.name}`}
+                          >
+                            {showReviewForm[hotel.id] ? 'Close review' : 'Write a review'}
+                          </button>
+
+                          <Link
+                            href={`/booking?hotelId=${hotel.id}&hotelName=${encodeURIComponent(hotel.name)}&price=${hotel.price}&checkIn=${checkIn}&checkOut=${checkOut}&guests=${guests}`}
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors font-semibold"
+                          >
+                            Book Now
+                          </Link>
+                        </div>
                       </div>
                     </div>
                   </div>
