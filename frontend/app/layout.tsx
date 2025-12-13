@@ -4,7 +4,6 @@ import "./globals.css";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 import { Toaster } from "react-hot-toast";
-import ChatWidget from "./components/ChatWidget";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -59,7 +58,6 @@ export default function RootLayout({
         <main className="flex-grow">
           {children}
         </main>
-        <ChatWidget />
         <Footer />
       </body>
     </html>

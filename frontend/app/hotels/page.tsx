@@ -29,104 +29,150 @@ function HotelsContent() {
 
   const [hotels, setHotels] = useState<Hotel[]>([]);
   const [filteredHotels, setFilteredHotels] = useState<Hotel[]>([]);
-  const [priceRange, setPriceRange] = useState([0, 50000]);
+  const [priceRange, setPriceRange] = useState([0, 500]);
   const [minRating, setMinRating] = useState(0);
   const [reviewsMap, setReviewsMap] = useState<Record<number, { count: number; avg: number; list: { user: string; rating: number; text: string; date?: string }[] }>>({});
   const [showReviewForm, setShowReviewForm] = useState<Record<number, boolean>>({});
   const [reviewForm, setReviewForm] = useState<Record<number, { rating: number; text: string }>>({});
 
   useEffect(() => {
-    // Mock hotel data filtered by location search
-    const mockHotels: Hotel[] = [
-      {
-        id: 1,
-        name: 'Grand Plaza Hotel',
-        location: location || 'Mumbai',
-        price: 20000,
-        rating: 4.8,
-        reviews: 342,
-        image: '/images/rooms/indoor-design-luxury-resort.jpg',
-        amenities: ['WiFi', 'Pool', 'Spa', 'Restaurant', 'Gym'],
-        description: 'Luxury hotel in the heart of the city with stunning views',
-      },
-      {
-        id: 2,
-        name: 'Sunset Beach Resort',
-        location: location || 'Goa',
-        price: 15000,
-        rating: 4.6,
-        reviews: 256,
-        image: '/images/rooms/modern-studio-apartment-design-with-bedroom-living-space.jpg',
-        amenities: ['WiFi', 'Beach Access', 'Pool', 'Restaurant'],
-        description: 'Beachfront resort perfect for a relaxing getaway',
-      },
-      {
-        id: 3,
-        name: 'City Center Inn',
-        location: location || 'Delhi',
-        price: 10000,
-        rating: 4.3,
-        reviews: 189,
-        image: '/images/rooms/vojtech-bruzek-Yrxr3bsPdS0-unsplash.jpg',
-        amenities: ['WiFi', 'Parking', 'Breakfast'],
-        description: 'Comfortable accommodation in downtown area',
-      },
-      {
-        id: 4,
-        name: 'Mountain View Lodge',
-        location: location || 'Shimla',
-        price: 16000,
-        rating: 4.7,
-        reviews: 298,
-        image: '/images/rooms/markus-spiske-g5ZIXjzRGds-unsplash.jpg',
-        amenities: ['WiFi', 'Mountain View', 'Restaurant', 'Fireplace'],
-        description: 'Cozy lodge with breathtaking mountain scenery',
-      },
-      {
-        id: 5,
-        name: 'Royal Palace Hotel',
-        location: location || 'Jaipur',
-        price: 29000,
-        rating: 4.9,
-        reviews: 428,
-        image: '/images/rooms/indoor-design-luxury-resort.jpg',
-        amenities: ['WiFi', 'Spa', 'Pool', 'Fine Dining', 'Concierge'],
-        description: 'Five-star luxury with world-class amenities',
-      },
-      {
-        id: 6,
-        name: 'Budget Comfort Suites',
-        location: location || 'Bangalore',
-        price: 6500,
-        rating: 4.1,
-        reviews: 156,
-        image: '/images/rooms/vojtech-bruzek-Yrxr3bsPdS0-unsplash.jpg',
-        amenities: ['WiFi', 'Parking', 'Breakfast'],
-        description: 'Affordable and comfortable rooms for budget travelers',
-      },
-    ];
-
-    setHotels(mockHotels);
-    setFilteredHotels(mockHotels);
-    // fetch persisted reviews from backend for each mock hotel (if backend available)
+    // Try fetching hotels from backend (seeded data). If backend unavailable, fall back to mock data.
     (async () => {
-      const map: Record<number, any> = {};
-      for (const h of mockHotels) {
-        try {
-          const res = await fetch(`http://localhost:8080/api/hotels/${h.id}/reviews`);
-          if (res.ok) {
-            const list = await res.json();
-            const count = list.length;
-            const avg = count ? list.reduce((s: number, r: any) => s + r.rating, 0) / count : h.rating;
-            map[h.id] = { count, avg, list };
-          } else {
+      try {
+        const res = await fetch(`http://localhost:8080/api/hotels`);
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            const mapped: Hotel[] = data.map((d: any, idx: number) => ({
+              id: d.hotelId ?? d.id ?? idx + 1,
+              name: d.name ?? d.hotelName ?? `Hotel ${idx + 1}`,
+              location: d.city ? `${d.city}${d.country ? ', ' + d.country : ''}` : (d.location || 'Unknown'),
+              price: d.price_per_night ?? d.price ?? 0,
+              rating: d.stars ?? d.rating ?? 4.0,
+              reviews: 0,
+              image: d.image || '/images/rooms/indoor-design-luxury-resort.jpg',
+              amenities: d.amenities ?? [],
+              description: d.description ?? '',
+            }));
+            setHotels(mapped);
+            setFilteredHotels(mapped);
+            // fetch persisted reviews for each returned hotel
+            const map: Record<number, any> = {};
+            for (const h of mapped) {
+              try {
+                const rres = await fetch(`http://localhost:8080/api/hotels/${h.id}/reviews`);
+                if (rres.ok) {
+                  const list = await rres.json();
+                  const count = list.length;
+                  const avg = count ? list.reduce((s: number, r: any) => s + r.rating, 0) / count : h.rating;
+                  map[h.id] = { count, avg, list };
+                } else {
+                  map[h.id] = { count: h.reviews || 0, avg: h.rating || 0, list: h.reviewsList || [] };
+                }
+              } catch (e) {
+                map[h.id] = { count: h.reviews || 0, avg: h.rating || 0, list: h.reviewsList || [] };
+              }
+            }
+            setReviewsMap(map);
+            return;
+          }
+        }
+      } catch (e) {
+        // ignore and fallback to mock
+      }
+
+      // Fallback mock data (6 items) if backend not available or returned no results
+      const mockHotels: Hotel[] = [
+        {
+          id: 1,
+          name: 'Grand Plaza Hotel',
+          location: location || 'Mumbai',
+          price: 20000,
+          rating: 4.8,
+          reviews: 342,
+          image: '/images/rooms/indoor-design-luxury-resort.jpg',
+          amenities: ['WiFi', 'Pool', 'Spa', 'Restaurant', 'Gym'],
+          description: 'Luxury hotel in the heart of the city with stunning views',
+        },
+        {
+          id: 2,
+          name: 'Sunset Beach Resort',
+          location: location || 'Goa',
+          price: 15000,
+          rating: 4.6,
+          reviews: 256,
+          image: '/images/rooms/modern-studio-apartment-design-with-bedroom-living-space.jpg',
+          amenities: ['WiFi', 'Beach Access', 'Pool', 'Restaurant'],
+          description: 'Beachfront resort perfect for a relaxing getaway',
+        },
+        {
+          id: 3,
+          name: 'City Center Inn',
+          location: location || 'Delhi',
+          price: 10000,
+          rating: 4.3,
+          reviews: 189,
+          image: '/images/rooms/vojtech-bruzek-Yrxr3bsPdS0-unsplash.jpg',
+          amenities: ['WiFi', 'Parking', 'Breakfast'],
+          description: 'Comfortable accommodation in downtown area',
+        },
+        {
+          id: 4,
+          name: 'Mountain View Lodge',
+          location: location || 'Shimla',
+          price: 16000,
+          rating: 4.7,
+          reviews: 298,
+          image: '/images/rooms/markus-spiske-g5ZIXjzRGds-unsplash.jpg',
+          amenities: ['WiFi', 'Mountain View', 'Restaurant', 'Fireplace'],
+          description: 'Cozy lodge with breathtaking mountain scenery',
+        },
+        {
+          id: 5,
+          name: 'Royal Palace Hotel',
+          location: location || 'Jaipur',
+          price: 29000,
+          rating: 4.9,
+          reviews: 428,
+          image: '/images/rooms/indoor-design-luxury-resort.jpg',
+          amenities: ['WiFi', 'Spa', 'Pool', 'Fine Dining', 'Concierge'],
+          description: 'Five-star luxury with world-class amenities',
+        },
+        {
+          id: 6,
+          name: 'Budget Comfort Suites',
+          location: location || 'Bangalore',
+          price: 6500,
+          rating: 4.1,
+          reviews: 156,
+          image: '/images/rooms/vojtech-bruzek-Yrxr3bsPdS0-unsplash.jpg',
+          amenities: ['WiFi', 'Parking', 'Breakfast'],
+          description: 'Affordable and comfortable rooms for budget travelers',
+        },
+      ];
+
+      setHotels(mockHotels);
+      setFilteredHotels(mockHotels);
+      // fetch persisted reviews from backend for each mock hotel (if backend available)
+      (async () => {
+        const map: Record<number, any> = {};
+        for (const h of mockHotels) {
+          try {
+            const res = await fetch(`http://localhost:8080/api/hotels/${h.id}/reviews`);
+            if (res.ok) {
+              const list = await res.json();
+              const count = list.length;
+              const avg = count ? list.reduce((s: number, r: any) => s + r.rating, 0) / count : h.rating;
+              map[h.id] = { count, avg, list };
+            } else {
+              map[h.id] = { count: h.reviews || 0, avg: h.rating || 0, list: h.reviewsList || [] };
+            }
+          } catch (e) {
             map[h.id] = { count: h.reviews || 0, avg: h.rating || 0, list: h.reviewsList || [] };
           }
-        } catch (e) {
-          map[h.id] = { count: h.reviews || 0, avg: h.rating || 0, list: h.reviewsList || [] };
         }
-      }
-      setReviewsMap(map);
+        setReviewsMap(map);
+      })();
     })();
   }, [location]);
 
@@ -171,14 +217,14 @@ function HotelsContent() {
                   <input
                     type="range"
                     min="0"
-                    max="50000"
-                    step="1000"
+                    max="500"
+                    step="10"
                     value={priceRange[1]}
                     onChange={(e) => setPriceRange([0, parseInt(e.target.value)])}
                     className="w-full"
                   />
                   <p className="text-sm text-gray-600">
-                    ₹0 - ₹{priceRange[1].toLocaleString('en-IN')} per night
+                    ₹0 - ₹{priceRange[1]} per night
                   </p>
                 </div>
               </div>
@@ -202,7 +248,7 @@ function HotelsContent() {
 
               <button
                 onClick={() => {
-                  setPriceRange([0, 50000]);
+                  setPriceRange([0, 500]);
                   setMinRating(0);
                 }}
                 className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 py-2 rounded-lg transition-colors"

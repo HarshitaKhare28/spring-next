@@ -75,7 +75,7 @@ public class HuggingFaceProxyController {
             }
         } catch (RestClientException ex) {
             log.error("Error contacting Hugging Face API", ex);
-            return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of("error", "failed to contact Hugging Face API", "details", ex.getMessage()));
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of("error", "failed to contact Hugging Face API", "   details", ex.getMessage()));
         }
     }
 
